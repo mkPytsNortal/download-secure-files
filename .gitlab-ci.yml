@@ -1,0 +1,19 @@
+variables:
+  GO_VERSION: "1.19"
+
+image: golang:${GO_VERSION}
+
+before_script:
+  - go get
+
+stages:
+  - test
+  - lint
+
+test:
+  script:
+    - go test -v
+
+lint:
+  script:
+    - golangci-lint run
