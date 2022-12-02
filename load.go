@@ -19,7 +19,7 @@ import (
 
 type Config struct {
 	url              string
-	projectId        string
+	projectID        string
 	downloadPath     string
 	authHeader       http.Header
 	workingDirectory string
@@ -37,19 +37,16 @@ func getEnvWithDefault(envVar, defaultValue string) string {
 	if value == "" {
 		return defaultValue
 	}
+
 	return value
 }
 
 func authHeader() http.Header {
 	if os.Getenv("CI_JOB_TOKEN") == "" {
-		return http.Header{
-			"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")},
-		}
-	} else {
-		return http.Header{
-			"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")},
-		}
+		return http.Header{"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")}}
 	}
+
+	return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}
 }
 
 func writeFile(fileData []byte, path string) (bool, error) {
@@ -70,7 +67,7 @@ func writeFile(fileData []byte, path string) (bool, error) {
 }
 
 func downloadFile(config Config, secureFile SecureFile) (err error) {
-	url := config.url + "/projects/" + config.projectId + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
+	url := config.url + "/projects/" + config.projectID + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
 
 	filePath, err := securejoin.SecureJoin(config.downloadPath, secureFile.Name)
 	if err != nil {
@@ -83,20 +80,16 @@ func downloadFile(config Config, secureFile SecureFile) (err error) {
 	}
 
 	body, err := httpGet(config, url)
-
 	if err != nil {
 		return err
 	}
 
 	_, err = writeFile(body, fileLocation)
-
 	if err != nil {
 		return err
 	}
 
-	_, err = verifyChecksum(secureFile, fileLocation)
-
-	if err != nil {
+	if err := verifyChecksum(secureFile, fileLocation); err != nil {
 		return err
 	}
 
@@ -105,34 +98,32 @@ func downloadFile(config Config, secureFile SecureFile) (err error) {
 	return nil
 }
 
-func verifyChecksum(file SecureFile, localFilePath string) (bool, error) {
+func verifyChecksum(file SecureFile, localFilePath string) error {
 	body, err := os.ReadFile(localFilePath)
-
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	sum := sha256.Sum256([]byte(body))
+	sum := sha256.Sum256(body)
 
 	if hex.EncodeToString(sum[:]) == file.Checksum {
-		return true, nil
-	} else {
-		return false, fmt.Errorf("Checksum validation failed for %s", file.Name)
+		return nil
 	}
+
+	return fmt.Errorf("validating checksum for %s", file.Name)
 }
 
-func createDownloadLocation(config Config) (status bool, err error) {
+func createDownloadLocation(config Config) error {
 	downloadLocation, err := securejoin.SecureJoin(config.workingDirectory, config.downloadPath)
-
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if err := os.MkdirAll(downloadLocation, os.ModePerm); err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 func httpGet(config Config, url string) (body []byte, err error) {
@@ -150,11 +141,10 @@ func httpGet(config Config, url string) (body []byte, err error) {
 
 	// make request
 	res, err := client.Do(req)
-	defer res.Body.Close()
-
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	// check response
 	if res.StatusCode != http.StatusOK {
@@ -162,7 +152,6 @@ func httpGet(config Config, url string) (body []byte, err error) {
 	}
 
 	body, err = io.ReadAll(res.Body)
-
 	if err != nil {
 		return nil, err
 	}
@@ -171,10 +160,9 @@ func httpGet(config Config, url string) (body []byte, err error) {
 }
 
 func getFileList(config Config) ([]SecureFile, error) {
-	var url = config.url + "/projects/" + config.projectId + "/secure_files"
+	var url = config.url + "/projects/" + config.projectID + "/secure_files"
 
 	body, err := httpGet(config, url)
-
 	if err != nil {
 		return nil, err
 	}
@@ -188,47 +176,43 @@ func getFileList(config Config) ([]SecureFile, error) {
 
 func downloadFiles(config Config) error {
 	files, err := getFileList(config)
-
 	if err != nil {
 		return err
 	}
 
 	if len(files) == 0 {
 		return nil
-	} else {
-		_, err := createDownloadLocation(config)
+	}
 
-		if err != nil {
+	if err := createDownloadLocation(config); err != nil {
+		return err
+	}
+
+	fmt.Printf("Loading Secure Files...\n")
+
+	for _, file := range files {
+		if err := downloadFile(config, file); err != nil {
 			return err
 		}
-
-		fmt.Printf("Loading Secure Files...\n")
-
-		for _, file := range files {
-			downloadErr := downloadFile(config, file)
-			if downloadErr != nil {
-				return downloadErr
-			}
-		}
-
-		return nil
 	}
+
+	return nil
 }
 
 func loadConfig() (Config, error) {
 	apiV4Url := getEnvWithDefault("CI_API_V4_URL", "https://gitlab.com/api/v4")
-	projectId := url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
+	projectID := url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
 	downloadPath := getEnvWithDefault("SECURE_FILES_DOWNLOAD_PATH", ".secure_files")
 	authHeader := authHeader()
-	workingDirectory, err := os.Getwd()
 
+	workingDirectory, err := os.Getwd()
 	if err != nil {
 		return Config{}, err
 	}
 
 	return Config{
 		apiV4Url,
-		projectId,
+		projectID,
 		downloadPath,
 		authHeader,
 		workingDirectory,
@@ -239,13 +223,11 @@ func main() {
 	godotenv.Load()
 
 	config, err := loadConfig()
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	err = downloadFiles(config)
-
 	if err != nil {
 		log.Fatal(err)
 	}
