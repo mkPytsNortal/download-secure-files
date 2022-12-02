@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +17,14 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type Config struct {
+	url              string
+	projectId        string
+	downloadPath     string
+	authHeader       http.Header
+	workingDirectory string
+}
+
 type SecureFile struct {
 	ID                int64  `json:"id"`
 	Name              string `json:"name"`
@@ -23,31 +32,15 @@ type SecureFile struct {
 	ChecksumAlgorithm string `json:"checksum_algorithm"`
 }
 
-func GetApiURL() string {
-	if os.Getenv("CI_API_V4_URL") == "" {
-		return "https://gitlab.com/api/v4"
-	} else {
-		return os.Getenv("CI_API_V4_URL")
+func getEnvWithDefault(envVar, defaultValue string) string {
+	value := os.Getenv(envVar)
+	if value == "" {
+		return defaultValue
 	}
+	return value
 }
 
-func GetProjectId() string {
-	if os.Getenv("CI_PROJECT_ID") == "" {
-		panic("Project ID missing")
-	} else {
-		return url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
-	}
-}
-
-func GetDownloadPath() string {
-	if os.Getenv("SECURE_FILES_DOWNLOAD_PATH") == "" {
-		return ".secure_files"
-	} else {
-		return os.Getenv("SECURE_FILES_DOWNLOAD_PATH")
-	}
-}
-
-func AuthHeader() http.Header {
+func authHeader() http.Header {
 	if os.Getenv("CI_JOB_TOKEN") == "" {
 		return http.Header{
 			"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")},
@@ -59,141 +52,201 @@ func AuthHeader() http.Header {
 	}
 }
 
-func GetFileList() []SecureFile {
-	var url = GetApiURL() + "/projects/" + GetProjectId() + "/secure_files"
-
-	response := HttpGet(url)
-
-	body, err := io.ReadAll(response.Body)
+func writeFile(fileData []byte, path string) (bool, error) {
+	// Create the file
+	out, err := os.Create(path)
 	if err != nil {
-		log.Fatal(err)
+		return false, err
+	}
+	defer out.Close()
+
+	// Writer the body to file
+	_, err = io.Copy(out, bytes.NewReader(fileData))
+	if err != nil {
+		return false, err
 	}
 
-	response.Body.Close()
-
-	var secureFiles []SecureFile
-
-	json.Unmarshal([]byte(body), &secureFiles)
-
-	return secureFiles
+	return true, nil
 }
 
-func HttpGet(url string) *http.Response {
+func downloadFile(config Config, secureFile SecureFile) (err error) {
+	url := config.url + "/projects/" + config.projectId + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
+
+	filePath, err := securejoin.SecureJoin(config.downloadPath, secureFile.Name)
+	if err != nil {
+		return err
+	}
+
+	fileLocation, err := securejoin.SecureJoin(config.workingDirectory, filePath)
+	if err != nil {
+		return err
+	}
+
+	body, err := httpGet(config, url)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = writeFile(body, fileLocation)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = verifyChecksum(secureFile, fileLocation)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s downloaded to %s\n", secureFile.Name, filePath)
+
+	return nil
+}
+
+func verifyChecksum(file SecureFile, localFilePath string) (bool, error) {
+	body, err := os.ReadFile(localFilePath)
+
+	if err != nil {
+		return false, err
+	}
+
+	sum := sha256.Sum256([]byte(body))
+
+	if hex.EncodeToString(sum[:]) == file.Checksum {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("Checksum validation failed for %s", file.Name)
+	}
+}
+
+func createDownloadLocation(config Config) (status bool, err error) {
+	downloadLocation, err := securejoin.SecureJoin(config.workingDirectory, config.downloadPath)
+
+	if err != nil {
+		return false, err
+	}
+
+	if err := os.MkdirAll(downloadLocation, os.ModePerm); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func httpGet(config Config, url string) (body []byte, err error) {
 	// initialize client
 	client := http.Client{}
 
 	// setup new request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// add authoriztion header
-	req.Header = AuthHeader()
+	req.Header = config.authHeader
 
 	// make request
 	res, err := client.Do(req)
+	defer res.Body.Close()
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// check response
 	if res.StatusCode != http.StatusOK {
-		log.Fatalf("bad status: %s", res.Status)
+		return nil, fmt.Errorf("bad status: %s", res.Status)
 	}
 
-	// return response
-	return res
+	body, err = io.ReadAll(res.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 }
 
-func WriteFile(fileData io.Reader, path string) bool {
-	// Create the file
-	out, err := os.Create(path)
-	if err != nil {
-		log.Fatal(err)
-		return false
-	}
-	defer out.Close()
+func getFileList(config Config) ([]SecureFile, error) {
+	var url = config.url + "/projects/" + config.projectId + "/secure_files"
 
-	// Writer the body to file
-	_, err = io.Copy(out, fileData)
+	body, err := httpGet(config, url)
+
 	if err != nil {
-		log.Fatal(err)
-		return false
+		return nil, err
 	}
 
-	return true
+	var secureFiles []SecureFile
+
+	json.Unmarshal([]byte(body), &secureFiles)
+
+	return secureFiles, nil
 }
 
-func DownloadFile(secureFile SecureFile) (err error) {
-	url := GetApiURL() + "/projects/" + GetProjectId() + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
-	cwd, _ := os.Getwd()
+func downloadFiles(config Config) error {
+	files, err := getFileList(config)
 
-	filePath, err := securejoin.SecureJoin(GetDownloadPath(), secureFile.Name)
-
-	fileLocation, err := securejoin.SecureJoin(cwd, filePath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	response := HttpGet(url)
-	WriteFile(response.Body, fileLocation)
-	response.Body.Close()
-
-	if VerifyChecksum(secureFile, fileLocation) {
-		fmt.Printf("%s downloaded to %s\n", secureFile.Name, filePath)
+	if len(files) == 0 {
+		return nil
 	} else {
-		os.Remove(fileLocation)
-		return fmt.Errorf("Checksum validation failed for %s", secureFile.Name)
-	}
+		_, err := createDownloadLocation(config)
 
-	return nil
-}
-
-func VerifyChecksum(file SecureFile, localFilePath string) bool {
-	body, _ := os.ReadFile(localFilePath)
-
-	sum := sha256.Sum256([]byte(body))
-
-	if hex.EncodeToString(sum[:]) == file.Checksum {
-		return true
-	} else {
-		return false
-	}
-}
-
-func CreateDownloadLocation() bool {
-	cwd, _ := os.Getwd()
-	downloadLocation := cwd + "/" + GetDownloadPath()
-
-	if err := os.MkdirAll(downloadLocation, os.ModePerm); err != nil {
-		log.Fatal(err)
-	}
-
-	return true
-}
-
-func DownloadFiles() *http.Response {
-	files := GetFileList()
-
-	if len(files) > 0 {
-		CreateDownloadLocation()
+		if err != nil {
+			return err
+		}
 
 		fmt.Printf("Loading Secure Files...\n")
 
 		for _, file := range files {
-			downloadErr := DownloadFile(file)
+			downloadErr := downloadFile(config, file)
 			if downloadErr != nil {
-				log.Fatal(downloadErr)
+				return downloadErr
 			}
 		}
+
+		return nil
+	}
+}
+
+func loadConfig() (Config, error) {
+	apiV4Url := getEnvWithDefault("CI_API_V4_URL", "https://gitlab.com/api/v4")
+	projectId := url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
+	downloadPath := getEnvWithDefault("SECURE_FILES_DOWNLOAD_PATH", ".secure_files")
+	authHeader := authHeader()
+	workingDirectory, err := os.Getwd()
+
+	if err != nil {
+		return Config{}, err
 	}
 
-	return nil
+	return Config{
+		apiV4Url,
+		projectId,
+		downloadPath,
+		authHeader,
+		workingDirectory,
+	}, nil
 }
 
 func main() {
 	godotenv.Load()
-	DownloadFiles()
+
+	config, err := loadConfig()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = downloadFiles(config)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }
