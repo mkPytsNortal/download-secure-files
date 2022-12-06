@@ -17,7 +17,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Config struct {
+type Downloader struct {
 	url              string
 	projectID        string
 	downloadPath     string
@@ -41,12 +41,14 @@ func getEnvWithDefault(envVar, defaultValue string) string {
 	return value
 }
 
-func authHeader() http.Header {
-	if os.Getenv("CI_JOB_TOKEN") == "" {
-		return http.Header{"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")}}
+func authHeader() (http.Header, error) {
+	if os.Getenv("CI_JOB_TOKEN") != "" {
+		return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}, nil
+	} else if os.Getenv("PRIVATE_TOKEN") != "" {
+		return http.Header{"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")}}, nil
+	} else {
+		return http.Header{}, fmt.Errorf("Authentication Token Missing")
 	}
-
-	return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}
 }
 
 func writeFile(fileData []byte, path string) (bool, error) {
@@ -66,20 +68,20 @@ func writeFile(fileData []byte, path string) (bool, error) {
 	return true, nil
 }
 
-func downloadFile(config Config, secureFile SecureFile) (err error) {
-	url := config.url + "/projects/" + config.projectID + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
+func (downloader Downloader) downloadFile(secureFile SecureFile) (err error) {
+	url := downloader.url + "/projects/" + downloader.projectID + "/secure_files/" + strconv.FormatInt(secureFile.ID, 10) + "/download"
 
-	filePath, err := securejoin.SecureJoin(config.downloadPath, secureFile.Name)
+	filePath, err := securejoin.SecureJoin(downloader.downloadPath, secureFile.Name)
 	if err != nil {
 		return err
 	}
 
-	fileLocation, err := securejoin.SecureJoin(config.workingDirectory, filePath)
+	fileLocation, err := securejoin.SecureJoin(downloader.workingDirectory, filePath)
 	if err != nil {
 		return err
 	}
 
-	body, err := httpGet(config, url)
+	body, err := downloader.httpGet(url)
 	if err != nil {
 		return err
 	}
@@ -89,7 +91,7 @@ func downloadFile(config Config, secureFile SecureFile) (err error) {
 		return err
 	}
 
-	if err := verifyChecksum(secureFile, fileLocation); err != nil {
+	if err := secureFile.verifyChecksum(fileLocation); err != nil {
 		return err
 	}
 
@@ -98,7 +100,7 @@ func downloadFile(config Config, secureFile SecureFile) (err error) {
 	return nil
 }
 
-func verifyChecksum(file SecureFile, localFilePath string) error {
+func (file SecureFile) verifyChecksum(localFilePath string) error {
 	body, err := os.ReadFile(localFilePath)
 	if err != nil {
 		return err
@@ -110,23 +112,23 @@ func verifyChecksum(file SecureFile, localFilePath string) error {
 		return nil
 	}
 
-	return fmt.Errorf("validating checksum for %s", file.Name)
+	return fmt.Errorf("failure validating checksum for %s", file.Name)
 }
 
-func createDownloadLocation(config Config) error {
-	downloadLocation, err := securejoin.SecureJoin(config.workingDirectory, config.downloadPath)
+func (downloader Downloader) createDownloadLocation() (error, string) {
+	downloadLocation, err := securejoin.SecureJoin(downloader.workingDirectory, downloader.downloadPath)
 	if err != nil {
-		return err
+		return err, downloadLocation
 	}
 
 	if err := os.MkdirAll(downloadLocation, os.ModePerm); err != nil {
-		return err
+		return err, downloadLocation
 	}
 
-	return nil
+	return nil, downloadLocation
 }
 
-func httpGet(config Config, url string) (body []byte, err error) {
+func (downloader Downloader) httpGet(url string) (body []byte, err error) {
 	// initialize client
 	client := http.Client{}
 
@@ -137,7 +139,7 @@ func httpGet(config Config, url string) (body []byte, err error) {
 	}
 
 	// add authoriztion header
-	req.Header = config.authHeader
+	req.Header = downloader.authHeader
 
 	// make request
 	res, err := client.Do(req)
@@ -159,10 +161,10 @@ func httpGet(config Config, url string) (body []byte, err error) {
 	return body, nil
 }
 
-func getFileList(config Config) ([]SecureFile, error) {
-	var url = config.url + "/projects/" + config.projectID + "/secure_files"
+func (downloader Downloader) getFileList() ([]SecureFile, error) {
+	var url = downloader.url + "/projects/" + downloader.projectID + "/secure_files"
 
-	body, err := httpGet(config, url)
+	body, err := downloader.httpGet(url)
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +176,8 @@ func getFileList(config Config) ([]SecureFile, error) {
 	return secureFiles, nil
 }
 
-func downloadFiles(config Config) error {
-	files, err := getFileList(config)
+func (downloader Downloader) downloadFiles() error {
+	files, err := downloader.getFileList()
 	if err != nil {
 		return err
 	}
@@ -184,14 +186,15 @@ func downloadFiles(config Config) error {
 		return nil
 	}
 
-	if err := createDownloadLocation(config); err != nil {
+	err, downloadLocation := downloader.createDownloadLocation()
+	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Loading Secure Files...\n")
+	fmt.Printf("Loading Secure Files to %s\n", downloadLocation)
 
 	for _, file := range files {
-		if err := downloadFile(config, file); err != nil {
+		if err := downloader.downloadFile(file); err != nil {
 			return err
 		}
 	}
@@ -199,18 +202,25 @@ func downloadFiles(config Config) error {
 	return nil
 }
 
-func loadConfig() (Config, error) {
+func newDownloaderFromEnv() (Downloader, error) {
 	apiV4Url := getEnvWithDefault("CI_API_V4_URL", "https://gitlab.com/api/v4")
-	projectID := url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
 	downloadPath := getEnvWithDefault("SECURE_FILES_DOWNLOAD_PATH", ".secure_files")
-	authHeader := authHeader()
+	authHeader, err := authHeader()
+	if err != nil {
+		return Downloader{}, err
+	}
+
+	projectID := url.QueryEscape(os.Getenv("CI_PROJECT_ID"))
+	if projectID == "" {
+		return Downloader{}, fmt.Errorf("Project ID missing")
+	}
 
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		return Config{}, err
+		return Downloader{}, err
 	}
 
-	return Config{
+	return Downloader{
 		apiV4Url,
 		projectID,
 		downloadPath,
@@ -222,12 +232,12 @@ func loadConfig() (Config, error) {
 func main() {
 	godotenv.Load()
 
-	config, err := loadConfig()
+	config, err := newDownloaderFromEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = downloadFiles(config)
+	err = config.downloadFiles()
 	if err != nil {
 		log.Fatal(err)
 	}
