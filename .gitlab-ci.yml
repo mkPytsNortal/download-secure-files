@@ -4,7 +4,6 @@ variables:
 image: golang:${GO_VERSION}
 
 before_script:
-  - go get
   - export VERSION=$(cat VERSION) 
 
 stages:
@@ -15,6 +14,7 @@ stages:
 
 test:
   script:
+    - go get
     - go test -v
 
 lint:
@@ -37,6 +37,7 @@ build:
   needs:
     - job: test
   script:
+    - go get
     - ./build-distribution.bash download-secure-files
   artifacts:
     paths:
