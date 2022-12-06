@@ -5,10 +5,13 @@ image: golang:${GO_VERSION}
 
 before_script:
   - go get
+  - export VERSION=$(cat VERSION) 
 
 stages:
   - test
   - lint
+  - build
+  - release
 
 test:
   script:
@@ -29,3 +32,57 @@ lint:
       codequality: gl-code-quality-report.json
     paths:
       - gl-code-quality-report.json
+
+build:
+  needs:
+    - job: test
+  script:
+    - ./build-distribution.bash download-secure-files
+  artifacts:
+    paths:
+      - dist/* 
+
+release:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: build
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never                                  # Do not run this job when a tag is created manually
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Run this job when commits are pushed or merged to the default branch
+  script:
+   - echo "Executing Release"
+   - echo "Version v$VERSION"  
+  variables:
+    PROJECT_PATH: gitlab-org/incubation-engineering/mobile-devops/download-secure-files
+  release:
+    name: "Release v$VERSION"
+    description: "v$VERSION release of the download-secure-files tool"
+    tag_name: "v$VERSION"
+    assets:
+      links:
+        - name: 'windows/amd64'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-windows-amd64.exe?job=build"
+          filepath: '/download-secure-files-windows-amd64.exe'
+        - name: 'windows/386'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-windows-386.exe?job=build"
+          filepath: '/download-secure-files-windows-386.exe'
+        - name: 'darwin/amd64'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-darwin-amd64?job=build"
+          filepath: '/download-secure-files-darwin-amd64'
+        - name: 'darwin/arm64'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-darwin-arm64?job=build"
+          filepath: '/download-secure-files-darwin-arm64'
+        - name: 'linux/386'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-linux-386?job=build"
+          filepath: '/download-secure-files-linux-386'
+        - name: 'linux/amd64'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-linux-amd64?job=build"
+          filepath: '/download-secure-files-linux-amd64'
+        - name: 'linux/arm'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-linux-arm?job=build"
+          filepath: '/download-secure-files-linux-arm'
+        - name: 'linux/arm64'
+          url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/releases/download-secure-files-linux-arm64?job=build"
+          filepath: '/download-secure-files-linux-arm64'

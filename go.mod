@@ -1,4 +1,4 @@
-module go-load-secure-files
+module download-secure-files
 
 go 1.19
 
