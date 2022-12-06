@@ -17,6 +17,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+var Version = "_development"
+
 type Downloader struct {
 	url              string
 	projectID        string
@@ -191,7 +193,7 @@ func (downloader Downloader) downloadFiles() error {
 		return err
 	}
 
-	fmt.Printf("Loading Secure Files to %s\n", downloadLocation)
+	fmt.Printf("Downloading Secure Files (v%s) to %s\n", Version, downloadLocation)
 
 	for _, file := range files {
 		if err := downloader.downloadFile(file); err != nil {
