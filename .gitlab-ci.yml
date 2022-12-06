@@ -3,9 +3,6 @@ variables:
 
 image: golang:${GO_VERSION}
 
-before_script:
-  - export VERSION=$(cat VERSION) 
-
 stages:
   - test
   - lint
@@ -37,11 +34,17 @@ build:
   needs:
     - job: test
   script:
+    - export VERSION=$(cat VERSION)
+    - echo "Version v$VERSION"  
     - go get
     - ./build-distribution.bash download-secure-files
+  after_script:
+    - echo "VERSION=$VERSION" >> job.env
   artifacts:
     paths:
       - dist/* 
+    reports:
+      dotenv: job.env    
 
 release:
   image: registry.gitlab.com/gitlab-org/release-cli:latest
