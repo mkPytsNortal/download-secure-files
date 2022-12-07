@@ -10,11 +10,20 @@
 # * curl is required
 
 os_name=$(uname -s | tr "[:upper:]" "[:lower:]")
-os_hardware=$(uname -m | tr "[:upper:]" "[:lower:]")
+
+architecture=""
+case $(uname -m) in
+    i386)   architecture="386" ;;
+    i686)   architecture="386" ;;
+    x86_64) architecture="amd64" ;;
+    arm64)  architecture="arm64" ;;
+    arm)    architecture="arm" ;;
+    *)   echo "Unable to determine system architecture."; exit 1 ;;
+esac
 
 current_path=$(pwd)
 
-bin_filename="download-secure-files-${os_name}-${os_hardware}"
+bin_filename="download-secure-files-${os_name}-${architecture}"
 
 download_url="https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/releases/permalink/latest/downloads/${bin_filename}"
 
