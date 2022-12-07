@@ -36,7 +36,7 @@ display_error() {
   exit 1
 }
 
-bin_dir="/usr/bin"
+bin_dir="$HOME/bin"
 [ "$bin_dir" == "" ] && display_error "No destination specified!"
 [ -d $bin_dir ] || mkdir -p $bin_dir > /dev/null 2>&1 || display_error "Failed to create $bin_dir"
 [ -z `which curl` ] && display_error "Could not find curl"
