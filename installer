@@ -60,4 +60,5 @@ mv $download_file $bin_dir/download-secure-files
 cd $current_path
 
 chmod +x $bin_dir/download-secure-files
+ls -lah $bin_dir
 $bin_dir/download-secure-files
