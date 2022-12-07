@@ -11,7 +11,7 @@ The download-secure-files project exists to create a simple way to integrate a G
 The quickest way to get started is to add the following line at the start of your CI script in your `.gitlab-ci.yml` file. 
 
 ```
-curl -s https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/load-secure-files/-/raw/main/installer | bash
+curl -s https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
 ```
 
 This command will run this program which will download all of the Secure Files for the project into the `.secure_files` directory in the CI job.
@@ -40,18 +40,25 @@ stages:
 
 test:
   script: 
-    - curl -s https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/load-secure-files/-/raw/main/installer | bash
+    - curl -s https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer | bash
     - ls -lah .secure_files
 ```
 
 ## How it works
 
-This project builds a self contained distribution that can be run on Linux, OS X, or Windows without having to install additional dependencies. 
+This project builds a self contained distribution that can be run on most Linux and macOS distributions without additional dependencies. 
 
 The `installer` script will attempt to detect the architecture of the machine and download the appropriate distribution. Once downloaded it will automatically run the program to download the Secure Files
 
 If for some reason the `installer` script doesn't work on your architecture, please create an issue in [this project](https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/issues), or feel free to contribute a merge request with suppport added for your architecture.
 
+## Troubleshooting
+
+Please visit the [download-secure-files tests](https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files-tests) project for usage examples for various platforms. 
+
+Known Issues:
+
+* [alpine linux requires additional dependencies](https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files-tests/-/blob/main/.gitlab-ci.yml#L46)
 
 ## Development
 

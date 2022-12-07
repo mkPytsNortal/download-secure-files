@@ -91,5 +91,7 @@ release:
 test-distributions:
   needs:
     - job: release
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"    
   trigger:
     project: gitlab-org/incubation-engineering/mobile-devops/download-secure-files-tests
