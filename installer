@@ -36,6 +36,19 @@ if [ "$bin_dir" == "" ]; then
   fi
 fi
 
+display_error() {
+  tput sgr0
+  tput setaf 1
+  echo "ERROR: $1"
+  tput sgr0
+  exit 1
+}
+
+
+[ "$bin_dir" == "" ] && display_error "No destination specified!"
+[ -d $bin_dir ] || mkdir -p $bin_dir > /dev/null 2>&1 || display_error "Failed to create $bin_dir"
+[ -z `which curl` ] && display_error "Could not find curl"
+
 tmp_dir=${TMPDIR:-/tmp}
 download_dir="$tmp_dir"
 download_file=${tmp_dir}${bin_filename}
