@@ -8,6 +8,7 @@ stages:
   - lint
   - build
   - release
+  - test-distributions
 
 test:
   script:
@@ -86,3 +87,9 @@ release:
         - name: 'linux/arm64'
           url: "https://gitlab.com/$PROJECT_PATH/-/jobs/artifacts/main/raw/dist/download-secure-files-linux-arm64?job=build"
           filepath: '/download-secure-files-linux-arm64'
+
+test-distributions:
+  needs:
+    - job: release
+  trigger:
+    project: gitlab-org/incubation-engineering/mobile-devops/download-secure-files-tests
