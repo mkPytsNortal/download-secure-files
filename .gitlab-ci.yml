@@ -57,13 +57,13 @@ release:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Run this job when commits are pushed or merged to the default branch
   script:
    - echo "Executing Release"
-   - echo "Version v$VERSION"  
+   - echo "Version v$(cat VERSION)"  
   variables:
     PROJECT_PATH: gitlab-org/incubation-engineering/mobile-devops/download-secure-files
   release:
-    name: "Release v$VERSION"
-    description: "v$VERSION release of the download-secure-files tool"
-    tag_name: "v$VERSION"
+    name: "Release v$(cat VERSION)"
+    description: "v$(cat VERSION) release of the download-secure-files tool"
+    tag_name: "v$(cat VERSION)"
     assets:
       links:
         - name: 'windows/amd64'
