@@ -38,13 +38,9 @@ build:
     - echo "Version v$VERSION"  
     - go get
     - ./build-distribution.bash download-secure-files
-  after_script:
-    - echo "VERSION=$VERSION" >> job.env
   artifacts:
     paths:
-      - dist/* 
-    reports:
-      dotenv: job.env    
+      - dist/*  
 
 release:
   image: registry.gitlab.com/gitlab-org/release-cli:latest
