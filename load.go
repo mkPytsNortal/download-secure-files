@@ -164,7 +164,7 @@ func (downloader Downloader) httpGet(url string) (body []byte, err error) {
 }
 
 func (downloader Downloader) getFileList() ([]SecureFile, error) {
-	var url = downloader.url + "/projects/" + downloader.projectID + "/secure_files"
+	var url = downloader.url + "/projects/" + downloader.projectID + "/secure_files?per_page=100"
 
 	body, err := downloader.httpGet(url)
 	if err != nil {
