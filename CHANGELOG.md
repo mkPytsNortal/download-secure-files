@@ -1,3 +1,6 @@
+## v0.1.4
+
+Updated file download limit from 20 to 100 files
 ## v0.1.3
 
 Documentation and testing updates
