@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	securejoin "github.com/cyphar/filepath-securejoin"
@@ -78,6 +79,10 @@ func (downloader Downloader) downloadFile(secureFile SecureFile) (err error) {
 		return err
 	}
 
+	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
+		return err
+	}
+
 	fileLocation, err := securejoin.SecureJoin(downloader.workingDirectory, filePath)
 	if err != nil {
 		return err
@@ -114,20 +119,20 @@ func (file SecureFile) verifyChecksum(localFilePath string) error {
 		return nil
 	}
 
-	return fmt.Errorf("failure validating checksum for %s", file.Name)
+	return fmt.Errorf("failure validating checksum for %s", localFilePath)
 }
 
-func (downloader Downloader) createDownloadLocation() (error, string) {
+func (downloader Downloader) createDownloadLocation() (string, error) {
 	downloadLocation, err := securejoin.SecureJoin(downloader.workingDirectory, downloader.downloadPath)
 	if err != nil {
-		return err, downloadLocation
+		return downloadLocation, err
 	}
 
 	if err := os.MkdirAll(downloadLocation, os.ModePerm); err != nil {
-		return err, downloadLocation
+		return downloadLocation, err
 	}
 
-	return nil, downloadLocation
+	return downloadLocation, nil
 }
 
 func (downloader Downloader) httpGet(url string) (body []byte, err error) {
@@ -188,7 +193,7 @@ func (downloader Downloader) downloadFiles() error {
 		return nil
 	}
 
-	err, downloadLocation := downloader.createDownloadLocation()
+	downloadLocation, err := downloader.createDownloadLocation()
 	if err != nil {
 		return err
 	}

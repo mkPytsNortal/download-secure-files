@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -160,7 +161,7 @@ func Test_verifyChecksum(t *testing.T) {
 	t.Run("when the checksums do not match", func(t *testing.T) {
 		secureFile := SecureFile{Checksum: "foo", Name: "foo.txt"}
 		actualError := secureFile.verifyChecksum("fixtures/test_file.txt")
-		assert.Equal(t, "failure validating checksum for foo.txt", actualError.Error())
+		assert.Equal(t, "failure validating checksum for fixtures/test_file.txt", actualError.Error())
 	})
 
 	t.Run("when the file could not be found", func(t *testing.T) {
@@ -175,30 +176,91 @@ func Test_createDownloadLocation(t *testing.T) {
 		workingDirectory, _ := os.Getwd()
 		downloader := Downloader{workingDirectory: workingDirectory, downloadPath: "fixtures/a"}
 
-		gotErr, gotDownloadLocation := downloader.createDownloadLocation()
+		gotDownloadLocation, gotErr := downloader.createDownloadLocation()
 
 		assert.Equal(t, nil, gotErr)
 		assert.Equal(t, workingDirectory+"/fixtures/a", gotDownloadLocation)
 		os.Remove(gotDownloadLocation)
 	})
 
-	// t.Run("when the download folder can not be created", func(t *testing.T) {
-	// 	downloader := Downloader{workingDirectory: "/foo/bar/", downloadPath: "a"}
-
-	// 	gotErr, gotDownloadLocation := downloader.createDownloadLocation()
-
-	// 	assert.Equal(t, "mkdir /foo: read-only file system", gotErr.Error())
-	// 	assert.Equal(t, "/foo/bar/a", gotDownloadLocation)
-	// })
-
 	t.Run("removes unallowed values from the download path", func(t *testing.T) {
 		workingDirectory, _ := os.Getwd()
 		downloader := Downloader{workingDirectory: workingDirectory, downloadPath: "../../../"}
 
-		gotErr, gotDownloadLocation := downloader.createDownloadLocation()
+		gotDownloadLocation, gotErr := downloader.createDownloadLocation()
 
 		assert.Equal(t, nil, gotErr)
 		assert.Equal(t, workingDirectory, gotDownloadLocation)
 		os.Remove(gotDownloadLocation)
+	})
+}
+
+func Test_downloadFile(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	httpmock.RegisterResponder("GET", `=~^http://localhost:3001\/api\/v4\/projects\/123\/secure_files\/1\/download`,
+		httpmock.NewStringResponder(200, `foobar`))
+
+	t.Run("a subfolder is created successfully when provided", func(t *testing.T) {
+		workingDirectory, err := os.Getwd()
+		assert.NoError(t, err)
+
+		downloadPath := "fixtures/a"
+
+		testDownloader := Downloader{
+			url:              "http://localhost:3001/api/v4",
+			workingDirectory: workingDirectory,
+			downloadPath:     downloadPath,
+			projectID:        "123",
+		}
+
+		assert.Equal(t, "fixtures/a", testDownloader.downloadPath)
+
+		secureFile := SecureFile{
+			ID:                1,
+			Name:              "foo/bar/mockfile.txt",
+			Checksum:          "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2",
+			ChecksumAlgorithm: "sha256",
+		}
+
+		gotErr := testDownloader.downloadFile(secureFile)
+		assert.NoError(t, gotErr)
+
+		_, pathErr := os.Stat("fixtures/a/foo/bar")
+		assert.NoError(t, pathErr)
+
+		os.RemoveAll(downloadPath)
+	})
+
+	t.Run("a subfolder is not created when the filename does not contain a subfolder", func(t *testing.T) {
+		workingDirectory, err := os.Getwd()
+		assert.NoError(t, err)
+
+		downloadPath := "fixtures/a"
+
+		testDownloader := Downloader{
+			url:              "http://localhost:3001/api/v4",
+			workingDirectory: workingDirectory,
+			downloadPath:     downloadPath,
+			projectID:        "123",
+		}
+
+		assert.Equal(t, "fixtures/a", testDownloader.downloadPath)
+
+		secureFile := SecureFile{
+			ID:                1,
+			Name:              "mockfile.txt",
+			Checksum:          "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2",
+			ChecksumAlgorithm: "sha256",
+		}
+
+		gotErr := testDownloader.downloadFile(secureFile)
+		assert.NoError(t, gotErr)
+
+		_, pathErr := os.Stat("fixtures/a")
+		assert.NoError(t, pathErr)
+
+		os.RemoveAll(downloadPath)
 	})
 }
