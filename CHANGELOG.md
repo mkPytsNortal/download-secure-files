@@ -1,3 +1,6 @@
+## v0.1.5
+
+Fixes a bug causing downloads to fail when a path exists in the filename https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/feedback/-/issues/5
 ## v0.1.4
 
 Updated file download limit from 20 to 100 files
