@@ -1,3 +1,6 @@
+## v0.1.6
+
+Fixes install bug when running on aarch64 https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/issues/4
 ## v0.1.5
 
 Fixes a bug causing downloads to fail when a path exists in the filename https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/feedback/-/issues/5
