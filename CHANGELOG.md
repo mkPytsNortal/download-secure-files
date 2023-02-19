@@ -1,3 +1,6 @@
+## v0.1.7
+
+CGO is disabled when building distributions. Fixes an error when running on Alpine instances https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/issues/5
 ## v0.1.6
 
 Fixes install bug when running on aarch64 https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/issues/4

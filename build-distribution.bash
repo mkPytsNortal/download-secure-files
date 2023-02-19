@@ -19,7 +19,7 @@ do
 		output_name+='.exe'
 	fi	
 
-	env GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-X 'main.Version=$(cat VERSION)'"  -o $output_name $package 
+	env CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-X 'main.Version=$(cat VERSION)'"  -o $output_name $package 
 	echo "building $output_name..."
 	if [ $? -ne 0 ]; then
    		echo 'An error has occurred! Aborting the script execution...'
