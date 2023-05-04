@@ -54,7 +54,7 @@ download_dir="$tmp_dir"
 download_file=${tmp_dir}/${bin_filename}
 
 echo "Downloading download-secure-files from ${download_url}"
-curl -k -L -H --no-progress-meter "Accept: application/octet-stream" $download_url -o ${download_file}
+curl -k -L -H "Accept: application/octet-stream" $download_url -o ${download_file}
 
 cd $bin_dir
 if [[ ! -f ${download_file} ]]; then
