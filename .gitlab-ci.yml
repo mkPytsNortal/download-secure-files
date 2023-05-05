@@ -55,6 +55,12 @@ release:
   script:
    - echo "Executing Release"
    - echo "Version v$(cat VERSION)"  
+  only:
+    changes:
+      - load.go
+      - load_test.go
+      - go.mod
+      - go.sum
   variables:
     PROJECT_PATH: gitlab-org/incubation-engineering/mobile-devops/download-secure-files
   release:
