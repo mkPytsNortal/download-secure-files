@@ -45,7 +45,7 @@ func getEnvWithDefault(envVar, defaultValue string) string {
 }
 
 func authHeader() (http.Header, error) {
-	return http.Header{}, fmt.Errorf(os.Getenv("PRIVATE_TOKEN"))
+	return http.Header{}, "aa"
 	if os.Getenv("CI_JOB_TOKEN") != "" {
 		return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}, nil
 	} else if os.Getenv("PRIVATE_TOKEN") != "" {
