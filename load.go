@@ -48,6 +48,7 @@ func authHeader() (http.Header, error) {
 	if os.Getenv("CI_JOB_TOKEN") != "" {
 		return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}, nil
 	} else if os.Getenv("PRIVATE_TOKEN") != "" {
+		fmt.Println(os.Getenv("PRIVATE_TOKEN"))
 		return http.Header{"PRIVATE-TOKEN": {os.Getenv("PRIVATE_TOKEN")}}, nil
 	} else {
 		return http.Header{}, fmt.Errorf("Authentication Token Missing")
