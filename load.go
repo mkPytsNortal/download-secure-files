@@ -45,7 +45,6 @@ func getEnvWithDefault(envVar, defaultValue string) string {
 }
 
 func authHeader() (http.Header, error) {
-	fmt.Printf("Token %s", os.Getenv("PRIVATE_TOKEN"))
 	if os.Getenv("CI_JOB_TOKEN") != "" {
 		return http.Header{"JOB-TOKEN": {os.Getenv("CI_JOB_TOKEN")}}, nil
 	} else if os.Getenv("PRIVATE_TOKEN") != "" {
@@ -158,7 +157,7 @@ func (downloader Downloader) httpGet(url string) (body []byte, err error) {
 
 	// check response
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status: %s", res.Status)
+		return nil, fmt.Errorf("bad status: %s and %s", res.Status, os.Getenv("PRIVATE_TOKEN"))
 	}
 
 	body, err = io.ReadAll(res.Body)
